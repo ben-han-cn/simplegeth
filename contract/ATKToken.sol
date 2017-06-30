@@ -9,14 +9,18 @@ contract ATKToken is StandardToken {
 
     address public ethFundDeposit;
     address public atkFundDeposit;
+    uint256 public fundingStartBlock;
+    uint256 public fundingEndBlock;
     bool public isFinalized;
 
     event CreateATK(address indexed _to, uint256 _value);
 
-    function ATKToken(address _ethFundDeposit, address _atkFundDeposit) {
+    function ATKToken(address _ethFundDeposit, address _atkFundDeposit, uint256 _fundingStartBlock, uint256 _fundingEndBlock) {
         isFinalized = false;
         ethFundDeposit = _ethFundDeposit;
         atkFundDeposit = _atkFundDeposit;
+        fundingStartBlock = _fundingStartBlock;
+        fundingEndBlock = _fundingEndBlock;
         balances[atkFundDeposit] = atkFund;
         totalSupply = atkFund;
         CreateATK(atkFundDeposit, atkFund);
@@ -24,28 +28,28 @@ contract ATKToken is StandardToken {
 
     function () payable external {
         if (msg.value == 0) throw;
-        createTokens(msg.sender, msg.value);
-    }
+        if (block.number < fundingStartBlock || block.number > fundingEndBlock) throw;
 
-    function createTokens(address recipient, uint256 ethVal) {
-        uint256 tokens = ethVal.mul(price);
+        uint256 tokens = msg.value.mul(price);
         uint256 newTotalSupply = totalSupply.add(tokens);
         if (tokenCreationCap < newTotalSupply) throw;
         totalSupply = newTotalSupply;
-        balances[recipient] = balances[recipient].add(tokens);
-        CreateATK(recipient, tokens);
+        balances[msg.sender] = balances[msg.sender].add(tokens);
+        CreateATK(msg.sender, tokens);
     }
 
     function finalize() external {
         if (isFinalized) throw;
         if (msg.sender != ethFundDeposit) throw; 
         if (totalSupply < tokenCreationMin) throw;      
+        if (block.number <= fundingEndBlock) throw;
         if (!ethFundDeposit.send(this.balance)) throw;  
         isFinalized = true;
     }
 
     function refund() external {
         if (isFinalized) throw;                     
+        if (block.number <= fundingEndBlock) throw; 
         if (totalSupply >= tokenCreationMin) throw;
         if (msg.sender == atkFundDeposit) throw;
         uint256 atkVal = balances[msg.sender];
